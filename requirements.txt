@@ -1,0 +1,22 @@
+flask
+flask-login
+pymongo
+python-dotenv
+werkzeug
+transformers
+torch
+accelerate
+langchain
+langchain-community
+langchain-huggingface
+# chromadb
+sentence-transformers
+beautifulsoup4
+keyboard
+pvrecorder
+numpy
+scipy
+openai
+langchain-ollama
+youtube-transcript-api
+pandas

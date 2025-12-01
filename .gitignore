@@ -1,0 +1,6 @@
+app/models/chatbot/model/model.safetensors
+model/model.safetensors
+embedding_cache/
+venv/
+whisper_cache/
+.env
