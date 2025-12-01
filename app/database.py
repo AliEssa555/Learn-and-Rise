@@ -2,9 +2,13 @@ from pymongo import MongoClient
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 import datetime
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 def get_db():
-    client = MongoClient('mongodb://localhost:27017/')
+    client = MongoClient(os.getenv("MONGODB_URI"))
     return client.english_learning
 
 def create_user(email, password):

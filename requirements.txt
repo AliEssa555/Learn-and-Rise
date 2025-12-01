@@ -20,3 +20,7 @@ openai
 langchain-ollama
 youtube-transcript-api
 pandas
+langchain-classic
+pydub
+hf_xet
+pyaudioop_lts
