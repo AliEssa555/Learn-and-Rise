@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Podcast Generator - Learn and Rise</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Learn & Rise</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/chat/chat_interface">Chat</a>
+                <a class="nav-link" href="/player">Player</a>
+                <a class="nav-link active" href="/podcast">Podcast</a>
+                <a class="nav-link" href="/auth/logout">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2 class="mb-4">AI Podcast Generator</h2>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5>1. Generate Script</h5>
+                <div class="input-group mb-3">
+                    <input type="text" id="topic" class="form-control"
+                        placeholder="Enter a topic (e.g. History of Rome)...">
+                    <button class="btn btn-success" id="generate-script">Generate Script</button>
+                </div>
+                <textarea id="script-area" class="form-control" rows="5"
+                    placeholder="Script will appear here..."></textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5>2. Generate Audio</h5>
+                <button class="btn btn-primary mb-3" id="generate-audio">Convert to Audio</button>
+                <div id="audio-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const genScriptBtn = document.getElementById('generate-script');
+        const genAudioBtn = document.getElementById('generate-audio');
+        const scriptArea = document.getElementById('script-area');
+        const audioContainer = document.getElementById('audio-container');
+
+        genScriptBtn.addEventListener('click', async () => {
+            const topic = document.getElementById('topic').value;
+            if (!topic) return;
+
+            scriptArea.value = "Generating script...";
+
+            const response = await fetch('/podcast/generate_script', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic })
+            });
+            const data = await response.json();
+            scriptArea.value = data.script;
+        });
+
+        genAudioBtn.addEventListener('click', async () => {
+            const text = scriptArea.value;
+            if (!text) return;
+
+            const response = await fetch('/podcast/generate_audio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await response.json();
+
+            if (data.audio_url) {
+                audioContainer.innerHTML = `
+                    <audio controls autoplay style="width: 100%">
+                        <source src="${data.audio_url}" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                `;
+            }
+        });
+    </script>
+</body>
+
+</html>

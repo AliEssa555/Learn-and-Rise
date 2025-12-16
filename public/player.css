@@ -1,0 +1,161 @@
+:root {
+    --primary-color: #4361ee;
+    --secondary-color: #3a0ca3;
+    --accent-color: #4cc9f0;
+    --light-bg: #f8f9fa;
+    --dark-text: #2b2d42;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--light-bg);
+    color: var(--dark-text);
+}
+
+.player-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.video-input-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.video-wrapper {
+    position: relative;
+    padding-bottom: 56.25%;
+    height: 0;
+    overflow: hidden;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    margin-bottom: 2rem;
+    background: #000;
+}
+
+.video-wrapper iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.transcript-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.transcript-line {
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+}
+
+.transcript-word {
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0.1rem 0.2rem;
+    border-radius: 3px;
+}
+
+.transcript-word:hover {
+    background-color: rgba(67, 97, 238, 0.1);
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.response-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+}
+
+.response-section {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+}
+
+.response-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.section-title {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.loading-spinner {
+    display: none;
+    text-align: center;
+    padding: 2rem;
+}
+
+#word-header {
+    display: none;
+}
+
+/* Section Headers */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0 10px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #4361ee;
+}
+
+.section-icon {
+    font-size: 1.5em;
+}
+
+/* Sub Headers */
+.sub-header {
+    background-color: #f5f8ff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 8px 0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    gap: 5px;
+}
+
+.sub-header:hover {
+    background-color: #e0e8ff;
+}
+
+.sub-header strong {
+    color: #3a0ca3;
+    min-width: 120px;
+}
+
+/* Interactive Elements */
+.interactive-elements {
+    margin-top: 20px;
+}
+
+/* Teacher's Note Special Styling */
+.response-section:last-child {
+    background-color: #fff9e6;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #ffd700;
+}

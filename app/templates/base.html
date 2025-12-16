@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Learning App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-title">English Learning</div>
+            <div class="nav-links">
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link"><i class="fas fa-home"></i> Home</a>
+                <a href="{{ url_for('player.video_player') }}" class="nav-link"><i class="fas fa-video"></i> Player</a>
+                <a href="{{ url_for('chatbot.chat_interface') }}" class="nav-link"><i class="fas fa-robot"></i>
+                    Chatbot</a>
+                <a href="{{ url_for('podcast.podcast_generator') }}" class="nav-link"><i class="fas fa-podcast"></i>
+                    Podcast</a>
+                <a href="{{ url_for('auth.logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+
+</html>

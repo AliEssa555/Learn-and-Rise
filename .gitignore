@@ -1,0 +1,46 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json* 
+# (Note: Usually package-lock is committed, but if it's causing issues or you want to ignore it locally for now, keep it. 
+# However, standard practice is to commit it. The big folder is node_modules.)
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+*.so
+
+# Environment Variables
+.env
+.env.local
+
+# Large Media & Models
+model/
+node_modules/
+app/models/chatbot/model/model.safetensors
+draft03_FYp_App/
+draft03_FYp_App/app/models/chatbot/model/model.safetensors
+*.safetensors
+*.bin
+*.pt
+whisper_cache/
+embedding_cache/
+*.mp3
+*.wav
+*.mp4
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs
+debug_log.txt
+server_log.txt
+*.log

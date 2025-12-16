@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>Welcome to English Learning App</h1>
+    
+    <div class="project-info">
+        <h2>About This Project</h2>
+        <p>This application helps you improve English speaking skills through:</p>
+        <ul>
+            <li>Interactive video lessons with transcript analysis</li>
+            <li>AI-powered conversation practice</li>
+            <li>Personalized podcast generation</li>
+        </ul>
+    </div>
+    
+    <div class="quick-start">
+        <h3>Get Started:</h3>
+        <div class="action-cards">
+            <a href="{{ url_for('player.video_player') }}" class="card">
+                <i class="fas fa-video"></i>
+                <span>Watch Videos</span>
+            </a>
+            <a href="{{ url_for('chatbot.chat_interface') }}" class="card">
+                <i class="fas fa-robot"></i>
+                <span>Practice Speaking</span>
+            </a>
+            <a href="{{ url_for('podcast.podcast_generator') }}" class="card">
+                <i class="fas fa-podcast"></i>
+                <span>Generate Podcast</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.dashboard {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.project-info {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+}
+
+.action-cards {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.card {
+    flex: 1;
+    background: #16a085;
+    color: white;
+    padding: 30px 20px;
+    text-align: center;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: transform 0.3s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.card i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.card span {
+    display: block;
+    font-size: 1.1rem;
+}
+</style>
+{% endblock %}

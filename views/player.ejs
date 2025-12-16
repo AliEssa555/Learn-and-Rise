@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Video Tutor - Learn and Rise</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/player.css" rel="stylesheet">
+    <style>
+        .transcript-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+
+        .transcript-word {
+            cursor: pointer;
+            padding: 2px;
+            border-radius: 3px;
+        }
+
+        .transcript-word:hover {
+            background-color: #ffd700;
+        }
+
+        .explanation-modal {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .close-modal {
+            float: right;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Learn & Rise</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/chat/chat_interface">Chat</a>
+                <a class="nav-link active" href="/player">Player</a>
+                <a class="nav-link" href="/podcast">Podcast</a>
+                <a class="nav-link" href="/auth/logout">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="input-group mb-3">
+                    <input type="text" id="youtube-url" class="form-control" placeholder="Paste YouTube URL...">
+                    <button class="btn btn-primary" id="load-video">Load Video</button>
+                </div>
+                <div id="video-container" class="ratio ratio-16x9 mb-3" style="display:none">
+                    <iframe id="video-frame" src="" allowfullscreen></iframe>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <h5>Interactive Transcript</h5>
+                <div id="transcript-container" class="transcript-container">
+                    <p class="text-muted">Load a video to see the transcript.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Explanation Modal -->
+    <div id="explanation-modal" class="explanation-modal">
+        <span class="close-modal">&times;</span>
+        <h5 id="modal-word"></h5>
+        <p id="modal-def"></p>
+    </div>
+
+    <script>
+        const loadBtn = document.getElementById('load-video');
+        const urlInput = document.getElementById('youtube-url');
+        const videoContainer = document.getElementById('video-container');
+        const videoFrame = document.getElementById('video-frame');
+        const transcriptContainer = document.getElementById('transcript-container');
+        const modal = document.getElementById('explanation-modal');
+        const closeModal = document.querySelector('.close-modal');
+
+        closeModal.onclick = () => modal.style.display = 'none';
+
+        loadBtn.addEventListener('click', async () => {
+            const url = urlInput.value;
+            if (!url) return;
+
+            // Extract Video ID
+            const videoId = url.split('v=')[1]?.split('&')[0];
+            if (!videoId) return alert('Invalid YouTube URL');
+
+            videoFrame.src = `https://www.youtube.com/embed/${videoId}`;
+            videoContainer.style.display = 'block';
+
+            // Load Transcript
+            transcriptContainer.innerHTML = 'Loading transcript...';
+            try {
+                const response = await fetch('/player/process_video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ youtube_url: url })
+                });
+                const data = await response.json();
+
+                if (data.transcript) {
+                    renderTranscript(data.transcript);
+                }
+            } catch (e) {
+                transcriptContainer.innerHTML = 'Failed to load transcript.';
+            }
+        });
+
+        function renderTranscript(items) {
+            transcriptContainer.innerHTML = '';
+            items.forEach(item => {
+                const p = document.createElement('p');
+                // Split text into words for interaction
+                const words = item.text.split(' ');
+                words.forEach(word => {
+                    const span = document.createElement('span');
+                    span.className = 'transcript-word';
+                    span.textContent = word + ' ';
+                    span.onclick = () => explainWord(word, item.text);
+                    p.appendChild(span);
+                });
+                transcriptContainer.appendChild(p);
+            });
+        }
+
+        async function explainWord(word, context) {
+            // Show loading
+            modal.style.display = 'block';
+            document.getElementById('modal-word').innerText = word;
+            document.getElementById('modal-def').innerText = 'Loading definition...';
+
+            try {
+                const response = await fetch('/player/explain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ word, context })
+                });
+                const data = await response.json();
+                document.getElementById('modal-def').innerText = data.explanation;
+            } catch (e) {
+                document.getElementById('modal-def').innerText = 'Error fetching definition.';
+            }
+        }
+    </script>
+</body>
+
+</html>
