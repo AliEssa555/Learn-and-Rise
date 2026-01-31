@@ -20,11 +20,10 @@ env/
 .env.local
 
 # Large Media & Models
-model/
+llm_models/
+llama.cpp/
+llama-env/
 node_modules/
-app/models/chatbot/model/model.safetensors
-draft03_FYp_App/
-draft03_FYp_App/app/models/chatbot/model/model.safetensors
 *.safetensors
 *.bin
 *.pt

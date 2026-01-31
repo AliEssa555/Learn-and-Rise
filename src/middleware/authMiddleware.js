@@ -1,3 +1,6 @@
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
 const authMiddleware = (req, res, next) => {
     // Check for auth cookie (simple mock)
     const authToken = req.cookies['auth_token'];
