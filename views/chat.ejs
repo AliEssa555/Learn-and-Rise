@@ -322,14 +322,48 @@
                     return;
                 }
 
-                alert("YouTube processing not fully implemented in this Node.js version yet, pending 'youtube-transcript' package.");
-                // Placeholder logic to show UI behavior
-                /*
                 try {
-                    const response = await fetch('/chat/process_transcript', { ... });
-                    ...
-                } catch (error) { ... }
-                */
+                    processUrlBtn.disabled = true;
+                    processUrlBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+                    const response = await fetch('/chat/process_transcript', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ youtube_url: url })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to process video');
+                    }
+
+                    // Show success
+                    addMessage(`Video processed: "${url}". ready to chat!`, 'Bot');
+
+                    // Show generated questions
+                    if (data.qa_pairs && data.qa_pairs.length > 0) {
+                        questionsList.innerHTML = '';
+                        data.qa_pairs.forEach(([q, a]) => {
+                            const qItem = document.createElement('div');
+                            qItem.className = 'question-item';
+                            qItem.innerText = q;
+                            qItem.addEventListener('click', () => {
+                                userInput.value = q;
+                                sendMessage();
+                            });
+                            questionsList.appendChild(qItem);
+                        });
+                        questionsContainer.style.display = 'block';
+                    }
+
+                } catch (error) {
+                    console.error('Error processing URL:', error);
+                    alert(`Error: ${error.message}`);
+                } finally {
+                    processUrlBtn.disabled = false;
+                    processUrlBtn.innerHTML = '<i class="fas fa-link"></i> Process';
+                }
             });
         });
     </script>

@@ -1,20 +1,19 @@
-const ollama = require('ollama').default;
+const grooveService = require('./groqService');
+const llamaCliService = require('./llamaCliService');
+require('dotenv').config();
 
 class LLMService {
     constructor() {
-        this.model = 'gemma3:4b';
+        this.useLocal = process.env.USE_LOCAL_LLM === 'true';
     }
 
     async generateResponse(prompt) {
-        try {
-            const response = await ollama.chat({
-                model: this.model,
-                messages: [{ role: 'user', content: `You are an English tutor. ${prompt}` }],
-            });
-            return response.message.content;
-        } catch (error) {
-            console.error('LLM Error:', error);
-            throw new Error('Failed to generate response from Ollama');
+        if (this.useLocal) {
+            console.log('Using Local LLM (LlamaCLI)...');
+            return await llamaCliService.generateResponse(prompt);
+        } else {
+            console.log('Using Online LLM (Groq)...');
+            return await grooveService.generateResponse(prompt);
         }
     }
 }

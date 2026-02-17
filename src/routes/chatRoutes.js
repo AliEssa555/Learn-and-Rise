@@ -7,6 +7,12 @@ const transcriptService = require('../services/transcriptService');
 // In production, use Redis or DB
 let sessionContext = "";
 
+router.get('/chat_interface', (req, res) => {
+    res.render('chat', {
+        user: req.user
+    });
+});
+
 router.post('/process_transcript', async (req, res) => {
     try {
         const { youtube_url } = req.body;
