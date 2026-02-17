@@ -28,19 +28,25 @@
                     <%= error %>
                 </div>
                 <% } %>
-                    <form action="/auth/login" method="POST">
-                        <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">
-                            <%= locals.mode==='signup' ? 'Sign Up' : 'Login' %>
-                        </button>
-                    </form>
+            <form action="<%= locals.mode === 'signup' ? '/auth/register' : '/auth/login' %>" method="POST">
+                <% if (locals.mode === 'signup') { %>
+                <div class="mb-3">
+                    <label class="form-label">Name</label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+                <% } %>
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">
+                    <%= locals.mode ==='signup' ? 'Sign Up' : 'Login' %>
+                </button>
+            </form>
                     <div class="mt-3 text-center">
                         <a href="/auth/signup">Create an account</a>
                     </div>

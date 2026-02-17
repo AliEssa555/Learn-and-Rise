@@ -43,3 +43,4 @@ embedding_cache/
 debug_log.txt
 server_log.txt
 *.log
+cleanIndexes.js

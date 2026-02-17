@@ -17,7 +17,7 @@ router.post('/register', async (req, res) => {
 
         let user = await User.findOne({ email })
         if (user) {
-            return res.status(400).json({ message: "User already exists" })
+            return res.render('login', { mode: 'signup', error: "User already exists" });
         }
 
         // Hash password
@@ -26,10 +26,17 @@ router.post('/register', async (req, res) => {
 
         user = new User({ name, email, password: hashedPassword })
         await user.save()
-        res.status(201).json({ message: "User registered successfully" });
+
+        // Generate Token
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+
+        // Set cookie and redirect
+        res.cookie('token', token, { httpOnly: true });
+        res.redirect('/');
     }
     catch (error) {
-        res.status(500).json({ message: "Server error" })
+        console.error(error);
+        res.render('login', { mode: 'signup', error: "Server error during registration" });
     }
 
 })
@@ -40,34 +47,42 @@ router.post('/login', async (req, res) => {
         let user = await User.findOne({ email })
 
         if (!user) {
-            return res.status(400).json({ message: "Invalid credentials" })
+            return res.render('login', { error: "Invalid credentials" });
         }
 
         //Verify password
+        console.log('Password provided:', password);
+        console.log('Stored hash:', user.password);
+        if (!password || !user.password) {
+            console.error('Missing password or hash');
+            return res.render('login', { error: "Invalid credentials" });
+        }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400)
+            return res.render('login', { error: "Invalid credentials" });
         }
 
         //Generate JWT token
-        const token = jwt.token({ id: user_id }, process.env.JWT_SECRET, { expiresIn: "1h" })
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" })
 
-        res.status(200).json({ token })
+        // Set cookie and redirect
+        res.cookie('token', token, { httpOnly: true });
+        res.redirect('/');
     }
     catch (error) {
-        res.status(500).json({ message: "Server error" })
+        console.error(error);
+        res.render('login', { error: "Server error during login" });
     }
 });
 
-/*
 router.get('/logout', (req, res) => {
-    res.clearCookie('auth_token');
+    res.clearCookie('token'); // changed from 'auth_token' to matches potentially what client uses, or just standard clearing
     res.redirect('/auth/login');
 });
 
 router.get('/signup', (req, res) => {
-    res.render('login', { mode: 'signup' }); // Reuse login template or create signup
+    res.render('login', { mode: 'signup' });
 });
-*/
+
 
 module.exports = router;

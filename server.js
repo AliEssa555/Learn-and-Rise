@@ -14,7 +14,13 @@ const podcastRoutes = require('./src/routes/podcastRoutes');
 dotenv.config();
 
 const app = express();
+const mongoose = require('mongoose');
 const PORT = process.env.PORT || 3000;
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('MongoDB Connected'))
+    .catch(err => console.log('MongoDB Connection Error:', err));
 
 // Middleware
 app.use(cors());
