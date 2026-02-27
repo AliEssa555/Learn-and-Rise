@@ -16,7 +16,8 @@ router.get('/chat_interface', (req, res) => {
 router.post('/process_transcript', async (req, res) => {
     try {
         const { youtube_url } = req.body;
-        console.log(`[ChatRoute] Received URL: ${youtube_url}`);
+        const traceId = req.headers['x-trace-id'] || 'no-trace';
+        console.log(`[ChatRoute] [${traceId}] Received URL: ${youtube_url}`);
 
         if (!youtube_url) return res.status(400).json({ error: 'YouTube URL required' });
 
@@ -86,15 +87,13 @@ router.post('/process_input', async (req, res) => {
             return res.status(400).json({ error: 'Message is required' });
         }
 
-        // Inject context
-        let context = "";
-        if (sessionContext) {
-            context = `Context: ${sessionContext.slice(0, 2000)}...\n`;
-        }
+        // Use refined signature: generateResponse(userInput, systemContext)
+        const systemContext = sessionContext
+            ? `You are a helpful language learning assistant. Use this video transcript as context: ${sessionContext.slice(0, 2000)}`
+            : "You are a helpful assistant.";
 
-        const prompt = `${context} User Question: ${message}`;
         console.log(`[ChatRoute] Requesting generation from LLM...`);
-        const response = await llmService.generateResponse(prompt);
+        const response = await llmService.generateResponse(message, systemContext);
         console.log(`[ChatRoute] LLM responded (${response.length} chars)`);
 
         res.json({

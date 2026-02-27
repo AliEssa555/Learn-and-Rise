@@ -46,12 +46,14 @@ class LlamaCliService {
 
             const child = spawn(this.executablePath, args, {
                 cwd: process.cwd(),
-                windowsHide: true, // Prevent child from creating a console window or stealing focus
-                stdio: ['ignore', 'pipe', 'pipe'] // Completely isolate stdin
+                detached: true, // Create a new process group on Windows
+                windowsHide: true,
+                stdio: ['ignore', 'pipe', 'pipe']
             });
 
             let output = '';
             let errorOutput = '';
+            const MAX_STRING_SIZE = 10 * 1024 * 1024; // 10MB limit
 
             const timeout = setTimeout(() => {
                 const msg = `[LlamaCLI] Generation TIMEOUT reached (300s).`;
@@ -61,6 +63,16 @@ class LlamaCliService {
                 reject(new Error("LLM generation timed out."));
             }, 300000);
 
+            // Important: Handle parent process exit to clean up child
+            const cleanup = () => {
+                if (child.exitCode === null) {
+                    console.log("[LlamaCLI] Parent process exiting, killing child...");
+                    child.kill('SIGKILL');
+                }
+            };
+            process.on('exit', cleanup);
+            process.on('SIGINT', cleanup);
+
             if (child.stdin) child.stdin.end();
 
             const startTime = Date.now();
@@ -68,9 +80,16 @@ class LlamaCliService {
 
             child.stdout.on('data', (data) => {
                 const chunk = data.toString();
+
+                if (output.length + chunk.length > MAX_STRING_SIZE) {
+                    console.error("[LlamaCLI] Runaway output detected (>10MB). Killing process.");
+                    child.kill('SIGKILL');
+                    return;
+                }
+
                 output += chunk;
 
-                if (!ingestionFinished) {
+                if (!ingestionFinished && output.trim().length > 0) {
                     const ingestionTime = ((Date.now() - startTime) / 1000).toFixed(2);
                     console.log(`[LlamaCLI] Prompt ingestion finished in ${ingestionTime}s. Generating output...`);
                     ingestionFinished = true;
@@ -81,37 +100,44 @@ class LlamaCliService {
 
             child.stderr.on('data', (data) => {
                 const chunk = data.toString();
+
+                if (errorOutput.length + chunk.length > MAX_STRING_SIZE) {
+                    child.kill('SIGKILL');
+                    return;
+                }
+
                 errorOutput += chunk;
                 logStream.write(`[STDERR] ${chunk}`);
 
                 if (chunk.includes('Found 1 Vulkan devices')) {
                     console.log(`[LlamaCLI] GPU detected: Vulkan acceleration active.`);
                 }
-                if (chunk.toLowerCase().includes('failed') || chunk.toLowerCase().includes('error')) {
-                    // Log critical errors to console even if redirected
-                    const line = chunk.split('\n').find(l => l.toLowerCase().includes('error') || l.toLowerCase().includes('failed'));
-                    if (line) console.error(`[LlamaCLI Error] ${line.trim()}`);
-                }
             });
 
             child.on('close', (code, signal) => {
                 clearTimeout(timeout);
-                const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-                console.log(`[LlamaCLI] Completed in ${totalTime}s. (Exit Code: ${code})`);
+                process.removeListener('exit', cleanup);
+                process.removeListener('SIGINT', cleanup);
 
+                const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
                 logStream.write(`\n\n--- Process finished in ${totalTime}s. Code: ${code}, Signal: ${signal} ---\n`);
                 logStream.end();
 
                 if (code !== 0 && code !== null) {
-                    const errorMsg = `LlamaCLI failed (code ${code}). See logs/llama_cli.log`;
+                    let errorMsg = `LlamaCLI failed (code ${code}).`;
+                    if (code === 130) {
+                        errorMsg = "LlamaCLI was interrupted (Code 130). This usually means the server restarted or nodemon detected a change.";
+                    }
+
                     console.error(`[LlamaCLI] ${errorMsg}`);
-                    return reject(new Error(errorMsg));
+                    // Only show stderr if it's not a standard interrupt
+                    if (code !== 130) {
+                        console.error(`[LlamaCLI] Last error output: ${errorOutput.slice(-500).trim()}`);
+                    }
+                    return reject(new Error(`${errorMsg} See logs/llama_cli.log for full details.`));
                 }
 
-                if (!output.trim() && signal) {
-                    return reject(new Error(`LlamaCLI was interrupted by signal ${signal}`));
-                }
-
+                console.log(`[LlamaCLI] Completed in ${totalTime}s.`);
                 resolve(output.trim());
             });
 
