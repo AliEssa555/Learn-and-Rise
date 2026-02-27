@@ -1,7 +1,6 @@
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+const admin = require('firebase-admin');
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
     // Check for auth cookie
     const token = req.cookies.token;
 
@@ -17,10 +16,11 @@ const authMiddleware = (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
+        const decodedClaims = await admin.auth().verifySessionCookie(token, true /** checkRevoked */);
+        req.user = decodedClaims;
         next();
     } catch (err) {
+        console.error("Session cookie verification failed:", err.message);
         res.clearCookie('token');
         return res.redirect('/auth/login');
     }

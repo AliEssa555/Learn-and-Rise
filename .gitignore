@@ -45,3 +45,4 @@ server_log.txt
 *.log
 cleanIndexes.js
 draft03_FYp_App/
+firebase-key.json

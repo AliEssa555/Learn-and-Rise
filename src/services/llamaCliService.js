@@ -16,7 +16,7 @@ class LlamaCliService {
             '-ngl', '100',
             '-c', '8192',
             '-t', '8',
-            '-n', '-1', // Generate until end of text
+            '-n', '-512', // Generate until end of text
             '--no-display-prompt'
         ];
     }
@@ -29,8 +29,7 @@ class LlamaCliService {
             const args = [...this.defaultArgs, '-p', `User: ${prompt}\nAssistant:`];
 
             const child = spawn(this.executablePath, args, {
-                cwd: process.cwd(),
-                shell: true
+                cwd: process.cwd()
             });
 
             let output = '';

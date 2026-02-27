@@ -1,88 +1,115 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const { message } = require('statuses');
+const admin = require('firebase-admin');
+const fetch = require('node-fetch'); // Required to call the Firebase REST API for password verification
 require('dotenv').config();
 
 const router = express.Router();
 
+// The Web API Key from Firebase Console (Project Settings -> General)
+// Needed for the REST API to verify passwords since Admin SDK doesn't do sign-in.
+const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY;
+
 router.get('/login', (req, res) => {
-    res.render('login');
+    res.render('login', { mode: 'login', error: null });
 });
 
 router.post('/register', async (req, res) => {
     try {
-        const { name, email, password } = req.body
+        const { name, email, password } = req.body;
 
-        let user = await User.findOne({ email })
-        if (user) {
-            return res.render('login', { mode: 'signup', error: "User already exists" });
+        // Check if user already exists
+        try {
+            await admin.auth().getUserByEmail(email);
+            return res.render('login', { mode: 'signup', error: "User already exists in Firebase" });
+        } catch (error) {
+            if (error.code !== 'auth/user-not-found') {
+                throw error;
+            }
         }
 
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        // Create user in Firebase Auth
+        const userRecord = await admin.auth().createUser({
+            email,
+            password,
+            displayName: name,
+        });
 
-        user = new User({ name, email, password: hashedPassword })
-        await user.save()
+        // Generate custom token or directly log them in via REST
+        if (!FIREBASE_WEB_API_KEY) {
+            console.log("No FIREBASE_WEB_API_KEY found, user created but skipping auto-login");
+            return res.redirect('/auth/login');
+        }
 
-        // Generate Token
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+        // Auto-login new user to give them a session cookie
+        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`, {
+            method: 'POST',
+            body: JSON.stringify({ email, password, returnSecureToken: true }),
+            headers: { 'Content-Type': 'application/json' }
+        });
 
-        // Set cookie and redirect
-        res.cookie('token', token, { httpOnly: true });
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(data.error.message);
+        }
+
+        // Create session cookie (expires in 5 days)
+        const expiresIn = 1000 * 60 * 60 * 24 * 5;
+        const sessionCookie = await admin.auth().createSessionCookie(data.idToken, { expiresIn });
+
+        res.cookie('token', sessionCookie, { maxAge: expiresIn, httpOnly: true });
         res.redirect('/');
-    }
-    catch (error) {
-        console.error(error);
-        res.render('login', { mode: 'signup', error: "Server error during registration" });
-    }
 
-})
+    } catch (error) {
+        console.error("Registration Error:", error);
+        res.render('login', { mode: 'signup', error: error.message || "Server error during registration" });
+    }
+});
 
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        let user = await User.findOne({ email })
 
-        if (!user) {
+        if (!FIREBASE_WEB_API_KEY) {
+            console.error("Missing FIREBASE_WEB_API_KEY in .env");
+            return res.render('login', { error: "Server Configuration Error: Missing Firebase Web API Key" });
+        }
+
+        // Verify password via Firebase REST API
+        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`, {
+            method: 'POST',
+            body: JSON.stringify({ email, password, returnSecureToken: true }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Login Error from Firebase:", data.error.message);
             return res.render('login', { error: "Invalid credentials" });
         }
 
-        //Verify password
-        console.log('Password provided:', password);
-        console.log('Stored hash:', user.password);
-        if (!password || !user.password) {
-            console.error('Missing password or hash');
-            return res.render('login', { error: "Invalid credentials" });
-        }
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.render('login', { error: "Invalid credentials" });
-        }
+        const idToken = data.idToken;
 
-        //Generate JWT token
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" })
+        // Create session cookie (expires in 5 days)
+        const expiresIn = 1000 * 60 * 60 * 24 * 5;
+        const sessionCookie = await admin.auth().createSessionCookie(idToken, { expiresIn });
 
-        // Set cookie and redirect
-        res.cookie('token', token, { httpOnly: true });
+        res.cookie('token', sessionCookie, { maxAge: expiresIn, httpOnly: true });
         res.redirect('/');
     }
     catch (error) {
-        console.error(error);
+        console.error("Login Server Error:", error);
         res.render('login', { error: "Server error during login" });
     }
 });
 
 router.get('/logout', (req, res) => {
-    res.clearCookie('token'); // changed from 'auth_token' to matches potentially what client uses, or just standard clearing
+    res.clearCookie('token');
     res.redirect('/auth/login');
 });
 
 router.get('/signup', (req, res) => {
-    res.render('login', { mode: 'signup' });
+    res.render('login', { mode: 'signup', error: null });
 });
-
 
 module.exports = router;

@@ -1,3 +1,6 @@
+const dns = require('node:dns/promises');
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
@@ -14,13 +17,16 @@ const podcastRoutes = require('./src/routes/podcastRoutes');
 dotenv.config();
 
 const app = express();
-const mongoose = require('mongoose');
+const admin = require('firebase-admin');
+const serviceAccount = require('./firebase-key.json');
+
 const PORT = process.env.PORT || 3000;
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('MongoDB Connected'))
-    .catch(err => console.log('MongoDB Connection Error:', err));
+// Initialize Firebase Admin SDK
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+console.log('Firebase Admin SDK Initialized');
 
 // Middleware
 app.use(cors());
