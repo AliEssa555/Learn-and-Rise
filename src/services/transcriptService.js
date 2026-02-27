@@ -126,7 +126,13 @@ class TranscriptService {
             const doc = await this.db.collection('transcripts').doc(videoId).get();
             if (doc.exists) {
                 console.log(`[TranscriptService] Cache HIT for ${videoId}`);
-                return { fullText: doc.data().fullText, items: [], cached: true };
+                const data = doc.data();
+                return {
+                    fullText: data.fullText,
+                    items: [],
+                    cached: true,
+                    qa_pairs: data.qa_pairs || []
+                };
             }
         } catch (error) {
             console.warn(`[TranscriptService] Cache check failed: ${error.message}`);
@@ -174,21 +180,22 @@ class TranscriptService {
         if (fullText && fullText.trim()) {
             console.log(`[TranscriptService] SUCCESS via ${strategy} (${fullText.length} chars)`);
 
-            // Save to Cache
+            // Save to Cache with QAPairs placeholder (populated later by route)
             try {
                 await this.db.collection('transcripts').doc(videoId).set({
                     fullText,
                     videoId,
                     url,
                     strategy,
+                    qa_pairs: [], // Initial empty, will be updated by process_transcript route
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
+                }, { merge: true });
                 console.log(`[TranscriptService] Result cached for ${videoId}`);
             } catch (cacheError) {
                 console.warn(`[TranscriptService] Failed to cache result: ${cacheError.message}`);
             }
 
-            return { fullText, items: [], cached: false };
+            return { fullText, items: [], cached: false, qa_pairs: [] };
         }
 
         console.error(`[TranscriptService] All transcript strategies failed for ${videoId}`);

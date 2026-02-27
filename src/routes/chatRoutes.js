@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const llmService = require('../services/llmService');
 const transcriptService = require('../services/transcriptService');
+const vectorService = require('../services/vectorService');
 
 // Store simple context in memory for this session
 // In production, use Redis or DB
@@ -23,51 +24,80 @@ router.post('/process_transcript', async (req, res) => {
 
         // Get Transcript
         console.log(`[ChatRoute] Fetching transcript...`);
-        const { fullText, items } = await transcriptService.getTranscript(youtube_url);
+        const { fullText, cached, qa_pairs: cachedPairs } = await transcriptService.getTranscript(youtube_url);
 
         if (!fullText || fullText.trim().length === 0) {
             console.warn(`[ChatRoute] Transcript is empty for URL: ${youtube_url}`);
             return res.status(400).json({ error: 'Video has no transcript or captions are disabled.' });
         }
 
+        sessionContext = fullText;
+        const videoId = transcriptService.extractVideoId(youtube_url);
+
+        // TRIGGER RAG INDEXING (Async)
+        // We don't await this to keep the UI fast, but we log the start
+        vectorService.upsertTranscript(videoId, fullText).catch(err => {
+            console.error(`[ChatRoute] Background RAG indexing failed:`, err.message);
+        });
+
+        // If we have cached Q&A pairs, return them immediately
+        if (cached && cachedPairs && cachedPairs.length > 0) {
+            console.log(`[ChatRoute] Using ${cachedPairs.length} cached Q&A pairs`);
+            return res.json({
+                message: 'Transcript loaded (from cache)',
+                // Ensure format is consistent for UI: [[Q, A], ...]
+                qa_pairs: cachedPairs.map(p => Array.isArray(p) ? p : [p.question, p.answer])
+            });
+        }
+
         console.log(`[ChatRoute] Transcript fetched (${fullText.length} chars)`);
 
-        sessionContext = fullText;
-
-        // Generate QA Pairs (Simple 1-shot generation)
-        const chunk = fullText.slice(0, 6000); // Increased slightly for more context
+        // Generate QA Pairs
+        const chunk = fullText.slice(0, 6000);
         const prompt = `Based on this video transcript, generate 3 thought-provoking Q&A pairs. Format: 'Q: ... A: ...'. Context: ${chunk}`;
 
         console.log(`[ChatRoute] Requesting QA generation from LLM...`);
-
-        // Increase request timeout for this long operation
-        req.setTimeout(600000); // 10 minutes (for heavy local LLM ingestion)
+        req.setTimeout(600000);
 
         const qaResponse = await llmService.generateResponse(prompt);
         console.log(`[ChatRoute] LLM responded with ${qaResponse.length} chars`);
 
-        // Naive parsing
+        // Robust parsing: convert to array of objects to avoid Firestore nested array error
         const qaPairs = [];
         const lines = qaResponse.split('\n');
         let currentQ = "";
 
         for (const line of lines) {
-            if (line.includes("Q:")) currentQ = line;
-            else if (line.includes("A:") && currentQ) {
-                qaPairs.push([currentQ, line]);
+            const trimmed = line.trim();
+            if (trimmed.startsWith("Q:")) {
+                currentQ = trimmed.replace(/^Q:\s*/i, '');
+            } else if (trimmed.startsWith("A:") && currentQ) {
+                const answer = trimmed.replace(/^A:\s*/i, '');
+                qaPairs.push({ question: currentQ, answer: answer });
                 currentQ = "";
             }
         }
 
         if (qaPairs.length === 0) {
             console.warn(`[ChatRoute] No Q&A pairs parsed from LLM response`);
-            qaPairs.push(["What is this video about?", "Ask me to find out!"]);
+            qaPairs.push({ question: "What is this video about?", answer: "Ask me to find out!" });
         }
 
-        console.log(`[ChatRoute] Sending ${qaPairs.length} Q&A pairs to client (Final step)`);
+        // Save newly generated pairs to cache
+        try {
+            const admin = require('firebase-admin');
+            await admin.firestore().collection('transcripts').doc(videoId).update({
+                qa_pairs: qaPairs
+            });
+            console.log(`[ChatRoute] Generated Q&A pairs saved to Firestore for ${videoId}`);
+        } catch (saveError) {
+            console.warn(`[ChatRoute] Failed to persist generated Q&A pairs: ${saveError.message}`);
+        }
+
+        console.log(`[ChatRoute] Sending ${qaPairs.length} Q&A pairs to client`);
         res.json({
-            message: 'Transcript processed',
-            qa_pairs: qaPairs
+            message: 'Transcript processed and questions generated',
+            qa_pairs: qaPairs.map(p => [p.question, p.answer]) // Compatibility with UI (array of arrays for frontend)
         });
     } catch (error) {
         console.error(`[ChatRoute] Error processing transcript:`, error);
@@ -87,13 +117,21 @@ router.post('/process_input', async (req, res) => {
             return res.status(400).json({ error: 'Message is required' });
         }
 
-        // Use refined signature: generateResponse(userInput, systemContext)
+        // Use refined signature: generateResponse(userInput, systemContext, videoId)
         const systemContext = sessionContext
             ? `You are a helpful language learning assistant. Use this video transcript as context: ${sessionContext.slice(0, 2000)}`
             : "You are a helpful assistant.";
 
-        console.log(`[ChatRoute] Requesting generation from LLM...`);
-        const response = await llmService.generateResponse(message, systemContext);
+        // Attempt to extract videoId for persistent history
+        let videoId = null;
+        if (req.body.youtube_url) {
+            videoId = transcriptService.extractVideoId(req.body.youtube_url);
+        } else if (req.headers.referer) {
+            videoId = transcriptService.extractVideoId(req.headers.referer);
+        }
+
+        console.log(`[ChatRoute] Requesting generation from LLM (VideoID: ${videoId})...`);
+        const response = await llmService.generateResponse(message, systemContext, videoId);
         console.log(`[ChatRoute] LLM responded (${response.length} chars)`);
 
         res.json({

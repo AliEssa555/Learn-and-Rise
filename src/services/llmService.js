@@ -1,4 +1,6 @@
 const llamaCliService = require('./llamaCliService');
+const chatHistoryService = require('./chatHistoryService');
+const vectorService = require('./vectorService');
 require('dotenv').config();
 
 // Standard imports (will resolve once user runs npm install)
@@ -36,7 +38,25 @@ if (SimpleChatModel) {
 
         async _call(prompt, options) {
             console.log(`[LlamaChatModel] Executing call to llama-cli...`);
-            return await llamaCliService.generateResponse(prompt);
+
+            // Handle different LangChain input types (string, message object, message array)
+            let promptText = "";
+            if (typeof prompt === 'string') {
+                promptText = prompt;
+            } else if (Array.isArray(prompt)) {
+                promptText = prompt.map(m => m.content || m.toString()).join('\n');
+            } else if (prompt && prompt.content) {
+                promptText = prompt.content;
+            } else {
+                promptText = prompt.toString();
+            }
+
+            // Final fallback to JSON if it still looks like an internal object
+            if (promptText.includes('[object')) {
+                promptText = JSON.stringify(prompt);
+            }
+
+            return await llamaCliService.generateResponse(promptText);
         }
     };
 }
@@ -44,15 +64,19 @@ if (SimpleChatModel) {
 class LLMService {
     constructor() {
         this.useLocal = process.env.USE_LOCAL_LLM === 'true';
-        this.history = []; // Simple in-memory history for LCEL
     }
 
-    async generateResponse(userPrompt, systemContext = "") {
+    /**
+     * @param {string} userPrompt 
+     * @param {string} systemContext 
+     * @param {string} videoId - Used for persistent history and RAG
+     */
+    async generateResponse(userPrompt, systemContext = "", videoId = null) {
         console.log(`[LLMService] Generating response (Local: ${this.useLocal})`);
 
         // If modern LangChain is ready
         if (this.useLocal && LlamaChatModel && ChatPromptTemplate) {
-            return await this._generateWithLCEL(userPrompt, systemContext);
+            return await this._generateWithLCEL(userPrompt, systemContext, videoId);
         }
 
         // Fallback 1: Direct Local LLM
@@ -72,17 +96,44 @@ class LLMService {
     }
 
     /**
-     * Modern LCEL (LangChain Expression Language) implementation.
+     * Modern LCEL implementation with persistent history and RAG.
      */
-    async _generateWithLCEL(userPrompt, systemContext) {
+    async _generateWithLCEL(userPrompt, systemContext, videoId) {
         console.log("[LLMService] Executing via modern LCEL sequence...");
 
         const model = new LlamaChatModel({});
 
+        // Load history from Firestore if videoId provided
+        let historyMessages = [];
+        if (videoId) {
+            const savedHistory = await chatHistoryService.getHistory(videoId);
+            // Format for ChatPromptTemplate: ["human", "message"]
+            historyMessages = savedHistory.map(([role, content]) => [role, content]);
+            console.log(`[LLMService] Loaded ${historyMessages.length} messages from persistent history.`);
+        }
+
+        // RAG SEARCH: Find relevant segments from the transcript
+        let ragContext = "";
+        if (videoId) {
+            ragContext = await vectorService.search(videoId, userPrompt);
+            if (ragContext) {
+                console.log(`[LLMService] RAG Context found (${ragContext.length} chars).`);
+            }
+        }
+
+        // Combine base system context with RAG context
+        const finalSystemPrompt = `${systemContext || "You are a helpful language learning assistant."}
+        
+Context from the video transcript:
+---
+${ragContext || "No specific context found."}
+---
+Use the provided context to answer the user's question accurately. If the information isn't in the context, use your general knowledge but mention it's not specific to the video.`;
+
         // Build modern prompt with history
         const prompt = ChatPromptTemplate.fromMessages([
-            ["system", systemContext || "You are a helpful language learning assistant."],
-            ...this.history,
+            ["system", finalSystemPrompt],
+            ...historyMessages,
             ["human", "{input}"],
         ]);
 
@@ -98,21 +149,20 @@ class LLMService {
             }).join('\n');
 
             const response = await model.invoke(formattedPrompt);
+            const responseContent = typeof response === 'string' ? response : response.content;
 
-            // Update history (Keep last 10 messages for context)
-            this.history.push(["human", userPrompt]);
-            this.history.push(["ai", response]);
-            if (this.history.length > 10) this.history = this.history.slice(-10);
+            // Save to Persistent History
+            if (videoId) {
+                await chatHistoryService.addMessage(videoId, 'human', userPrompt);
+                await chatHistoryService.addMessage(videoId, 'ai', responseContent);
+            }
 
-            return response;
+            return responseContent;
         } catch (err) {
             console.error("[LLMService] LCEL Execution Error:", err.message);
-            return await llamaCliService.generateResponse(userPrompt); // Final fallback
+            const fallback = await llamaCliService.generateResponse(userPrompt);
+            return typeof fallback === 'string' ? fallback : (fallback.content || fallback.toString());
         }
-    }
-
-    clearHistory() {
-        this.history = [];
     }
 }
 

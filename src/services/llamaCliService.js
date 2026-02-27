@@ -26,7 +26,9 @@ class LlamaCliService {
             '-n', '512',
             '--temp', '0.1',
             '--repeat-penalty', '1.1',
-            '--no-display-prompt'
+            '--no-display-prompt',
+            '--reverse-prompt', 'User:',
+            '--reverse-prompt', 'System:'
         ];
     }
 
@@ -35,45 +37,54 @@ class LlamaCliService {
             console.warn("[LlamaCLI] Received empty prompt, skipping generation.");
             return "No input provided for generation.";
         }
+
+        const runId = Math.random().toString(36).substring(7);
+        const tempPromptPath = path.join(this.logDir, `prompt_${runId}.txt`);
+
         return new Promise((resolve, reject) => {
-            console.log(`[LlamaCLI] Starting generation... (Internal logs in logs/llama_cli.log)`);
+            try {
+                // Write prompt to file to avoid command-line length limits and shell-escaping issues
+                fs.writeFileSync(tempPromptPath, `User: ${prompt}\nAssistant:`);
+            } catch (fsErr) {
+                console.error("[LlamaCLI] Failed to write temp prompt:", fsErr);
+                return reject(fsErr);
+            }
 
-            // Use non-blocking write stream
-            const logStream = fs.createWriteStream(this.logPath);
-            logStream.write(`--- LlamaCLI Run Start: ${new Date().toISOString()} ---\n`);
+            console.log(`[LlamaCLI] [${runId}] Starting generation...`);
 
-            const args = [...this.defaultArgs, '-p', `User: ${prompt}\nAssistant:`];
+            // Use non-blocking write stream for internal debugging
+            const logStream = fs.createWriteStream(this.logPath, { flags: 'a' });
+            logStream.write(`\n--- LlamaCLI Run Start [${runId}]: ${new Date().toISOString()} ---\n`);
+
+            // Use -f instead of -p for maximum reliability with multi-line prompts
+            const args = [...this.defaultArgs, '-f', tempPromptPath];
 
             const child = spawn(this.executablePath, args, {
                 cwd: process.cwd(),
-                detached: true, // Create a new process group on Windows
+                detached: true,
                 windowsHide: true,
                 stdio: ['ignore', 'pipe', 'pipe']
             });
 
             let output = '';
             let errorOutput = '';
+            let killedDueToRunaway = false;
+            let lastValidLength = 0;
             const MAX_STRING_SIZE = 10 * 1024 * 1024; // 10MB limit
 
             const timeout = setTimeout(() => {
-                const msg = `[LlamaCLI] Generation TIMEOUT reached (300s).`;
+                const msg = `[LlamaCLI] [${runId}] Generation TIMEOUT reached (300s).`;
                 console.error(msg);
-                logStream.write(`\n\nERROR: ${msg}\n`);
                 child.kill('SIGKILL');
                 reject(new Error("LLM generation timed out."));
             }, 300000);
 
-            // Important: Handle parent process exit to clean up child
             const cleanup = () => {
-                if (child.exitCode === null) {
-                    console.log("[LlamaCLI] Parent process exiting, killing child...");
-                    child.kill('SIGKILL');
-                }
+                if (child.exitCode === null) child.kill('SIGKILL');
+                try { if (fs.existsSync(tempPromptPath)) fs.unlinkSync(tempPromptPath); } catch (e) { }
             };
             process.on('exit', cleanup);
             process.on('SIGINT', cleanup);
-
-            if (child.stdin) child.stdin.end();
 
             const startTime = Date.now();
             let ingestionFinished = false;
@@ -81,36 +92,41 @@ class LlamaCliService {
             child.stdout.on('data', (data) => {
                 const chunk = data.toString();
 
-                if (output.length + chunk.length > MAX_STRING_SIZE) {
-                    console.error("[LlamaCLI] Runaway output detected (>10MB). Killing process.");
+                if (!killedDueToRunaway && output.length + chunk.length > MAX_STRING_SIZE) {
+                    console.error(`[LlamaCLI] [${runId}] Runaway output detected (>10MB). Killing.`);
+                    killedDueToRunaway = true;
                     child.kill('SIGKILL');
                     return;
                 }
 
-                output += chunk;
+                if (!killedDueToRunaway) {
+                    output += chunk;
 
-                if (!ingestionFinished && output.trim().length > 0) {
-                    const ingestionTime = ((Date.now() - startTime) / 1000).toFixed(2);
-                    console.log(`[LlamaCLI] Prompt ingestion finished in ${ingestionTime}s. Generating output...`);
-                    ingestionFinished = true;
+                    // SMART SALVAGING: Track last valid point (stats or stop tokens)
+                    const statsIndex = output.indexOf('[ Prompt:');
+                    if (statsIndex !== -1) {
+                        lastValidLength = statsIndex;
+                    } else if (output.includes('User:')) {
+                        lastValidLength = output.lastIndexOf('User:');
+                    } else {
+                        lastValidLength = output.length;
+                    }
+
+                    if (!ingestionFinished && output.trim().length > 0) {
+                        const ingestionTime = ((Date.now() - startTime) / 1000).toFixed(2);
+                        console.log(`[LlamaCLI] [${runId}] Ingestion finished in ${ingestionTime}s. Generating...`);
+                        ingestionFinished = true;
+                    }
                 }
-
                 logStream.write(chunk);
             });
 
             child.stderr.on('data', (data) => {
                 const chunk = data.toString();
-
-                if (errorOutput.length + chunk.length > MAX_STRING_SIZE) {
-                    child.kill('SIGKILL');
-                    return;
-                }
-
                 errorOutput += chunk;
-                logStream.write(`[STDERR] ${chunk}`);
-
+                logStream.write(`[ERR] ${chunk}`);
                 if (chunk.includes('Found 1 Vulkan devices')) {
-                    console.log(`[LlamaCLI] GPU detected: Vulkan acceleration active.`);
+                    console.log(`[LlamaCLI] [${runId}] GPU detected.`);
                 }
             });
 
@@ -119,36 +135,55 @@ class LlamaCliService {
                 process.removeListener('exit', cleanup);
                 process.removeListener('SIGINT', cleanup);
 
+                // Cleanup temp file
+                try { if (fs.existsSync(tempPromptPath)) fs.unlinkSync(tempPromptPath); } catch (e) { }
+
                 const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-                logStream.write(`\n\n--- Process finished in ${totalTime}s. Code: ${code}, Signal: ${signal} ---\n`);
+                logStream.write(`\n--- Run Finished [${runId}] in ${totalTime}s. Code: ${code} ---\n`);
                 logStream.end();
 
-                if (code !== 0 && code !== null) {
-                    let errorMsg = `LlamaCLI failed (code ${code}).`;
-                    if (code === 130) {
-                        errorMsg = "LlamaCLI was interrupted (Code 130). This usually means the server restarted or nodemon detected a change.";
+                if (killedDueToRunaway) {
+                    const salvaged = output.substring(0, lastValidLength).trim();
+                    if (salvaged.length > 50) {
+                        console.log(`[LlamaCLI] [${runId}] Runaway triggered, salvaging ${salvaged.length} chars.`);
+                        return resolve(this._cleanResponse(salvaged));
                     }
-
-                    console.error(`[LlamaCLI] ${errorMsg}`);
-                    // Only show stderr if it's not a standard interrupt
-                    if (code !== 130) {
-                        console.error(`[LlamaCLI] Last error output: ${errorOutput.slice(-500).trim()}`);
-                    }
-                    return reject(new Error(`${errorMsg} See logs/llama_cli.log for full details.`));
+                    return reject(new Error("LlamaCLI produced runaway output (>10MB)."));
                 }
 
-                console.log(`[LlamaCLI] Completed in ${totalTime}s.`);
-                resolve(output.trim());
+                if (code !== 0 && code !== null) {
+                    console.error(`[LlamaCLI] [${runId}] Failed with code ${code}.`);
+                    return reject(new Error(`LlamaCLI failed (code ${code}).`));
+                }
+
+                console.log(`[LlamaCLI] [${runId}] Completed in ${totalTime}s.`);
+                resolve(this._cleanResponse(output));
             });
 
             child.on('error', (err) => {
                 clearTimeout(timeout);
-                console.error(`[LlamaCLI] Spawn Error:`, err);
-                logStream.write(`\n\nSPAWN ERROR: ${err.message}\n`);
-                logStream.end();
+                cleanup();
+                console.error(`[LlamaCLI] [${runId}] Spawn Error:`, err);
                 reject(err);
             });
         });
+    }
+
+    _cleanResponse(output) {
+        let cleaned = output.trim();
+        const assistantMarker = "Assistant:";
+        const lastMarkerIndex = cleaned.lastIndexOf(assistantMarker);
+
+        if (lastMarkerIndex !== -1) {
+            cleaned = cleaned.substring(lastMarkerIndex + assistantMarker.length).trim();
+        }
+
+        // Also remove any leftover statistics block if salvaged
+        if (cleaned.includes('[ Prompt:')) {
+            cleaned = cleaned.split('[ Prompt:')[0].trim();
+        }
+
+        return cleaned;
     }
 }
 

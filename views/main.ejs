@@ -51,6 +51,29 @@
                 </a>
             </div>
         </div>
+
+        <% if (recentConvos && recentConvos.length> 0) { %>
+            <div class="recent-history mt-5">
+                <h3>Continue Learning:</h3>
+                <div class="history-list">
+                    <% recentConvos.forEach(convo=> { %>
+                        <div class="history-item">
+                            <div class="history-info">
+                                <strong>Video: <%= convo.videoId %></strong>
+                                <p class="text-muted small mb-1">
+                                    <%= convo.preview %>
+                                </p>
+                                <span class="badge bg-secondary">
+                                    <%= convo.date %>
+                                </span>
+                            </div>
+                            <a href="/chat/chat_interface?videoId=<%= convo.videoId %>"
+                                class="btn btn-outline-primary btn-sm">Resume Chat</a>
+                        </div>
+                        <% }) %>
+                </div>
+            </div>
+            <% } %>
     </div>
 
     <style>
@@ -97,6 +120,27 @@
         .card span {
             display: block;
             font-size: 1.1rem;
+        }
+
+        .history-list {
+            margin-top: 15px;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid #16a085;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            margin-bottom: 10px;
+        }
+
+        .history-info {
+            flex: 1;
+            margin-right: 20px;
         }
     </style>
 </body>

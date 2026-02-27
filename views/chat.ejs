@@ -279,6 +279,17 @@
             const chatHistory = document.getElementById('chat-history');
             const sendBtn = document.getElementById('send-text');
 
+            // --- AUTO-LOAD FROM URL PARAMS ---
+            const urlParams = new URLSearchParams(window.location.search);
+            const videoIdParam = urlParams.get('videoId');
+            if (videoIdParam) {
+                youtubeUrlInput.value = `https://www.youtube.com/watch?v=${videoIdParam}`;
+                // Small delay to ensure all listeners are ready
+                setTimeout(() => {
+                    processUrlBtn.click();
+                }, 500);
+            }
+
             // --- FUNCTION: Add Message to UI ---
             function addMessage(text, sender) {
                 const messageDiv = document.createElement('div');
@@ -302,10 +313,15 @@
                 userInput.value = '';
 
                 try {
+                    const youtubeUrl = youtubeUrlInput.value.trim();
                     const response = await fetch('/chat/process_input', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: message, input_type: 'text' })
+                        body: JSON.stringify({
+                            message: message,
+                            input_type: 'text',
+                            youtube_url: youtubeUrl
+                        })
                     });
 
                     const data = await response.json();
