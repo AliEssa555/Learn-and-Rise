@@ -160,6 +160,7 @@
     "wavefile": "^11.0.0",
     "webidl-conversions": "^7.0.0",
     "whatwg-url": "^14.2.0",
+    "youtube-captions-scraper": "^2.0.3",
     "youtube-transcript": "^1.2.1"
   },
   "scripts": {

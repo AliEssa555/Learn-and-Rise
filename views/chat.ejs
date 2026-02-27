@@ -359,7 +359,7 @@
 
                 } catch (error) {
                     console.error('Error processing URL:', error);
-                    alert(`Error: ${error.message}`);
+                    alert(`Error processing video: ${error.message}\n\nCheck server logs for details.`);
                 } finally {
                     processUrlBtn.disabled = false;
                     processUrlBtn.innerHTML = '<i class="fas fa-link"></i> Process';

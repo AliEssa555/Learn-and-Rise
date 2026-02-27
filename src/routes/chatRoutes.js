@@ -16,10 +16,20 @@ router.get('/chat_interface', (req, res) => {
 router.post('/process_transcript', async (req, res) => {
     try {
         const { youtube_url } = req.body;
+        console.log(`[ChatRoute] Received URL: ${youtube_url}`);
+
         if (!youtube_url) return res.status(400).json({ error: 'YouTube URL required' });
 
         // Get Transcript
+        console.log(`[ChatRoute] Fetching transcript...`);
         const { fullText, items } = await transcriptService.getTranscript(youtube_url);
+
+        if (!fullText || fullText.trim().length === 0) {
+            console.warn(`[ChatRoute] Transcript is empty for URL: ${youtube_url}`);
+            return res.status(400).json({ error: 'Video has no transcript or captions are disabled.' });
+        }
+
+        console.log(`[ChatRoute] Transcript fetched (${fullText.length} chars)`);
 
         sessionContext = fullText;
 
@@ -27,7 +37,9 @@ router.post('/process_transcript', async (req, res) => {
         const chunk = fullText.slice(0, 4000); // Limit context
         const prompt = `Based on this video transcript, generate 3 thought-provoking Q&A pairs. Format: 'Q: ... A: ...'. Context: ${chunk}`;
 
+        console.log(`[ChatRoute] Requesting QA generation from LLM...`);
         const qaResponse = await llmService.generateResponse(prompt);
+        console.log(`[ChatRoute] LLM responded with ${qaResponse.length} chars`);
 
         // Naive parsing
         const qaPairs = [];
@@ -42,21 +54,29 @@ router.post('/process_transcript', async (req, res) => {
             }
         }
 
-        if (qaPairs.length === 0) qaPairs.push(["What is this video about?", "Ask me to find out!"]);
+        if (qaPairs.length === 0) {
+            console.warn(`[ChatRoute] No Q&A pairs parsed from LLM response`);
+            qaPairs.push(["What is this video about?", "Ask me to find out!"]);
+        }
 
+        console.log(`[ChatRoute] Sending ${qaPairs.length} Q&A pairs to client`);
         res.json({
             message: 'Transcript processed',
             qa_pairs: qaPairs
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
+        console.error(`[ChatRoute] Error processing transcript:`, error);
+        res.status(500).json({
+            error: error.message || 'Internal Server Error during transcript processing',
+            details: error.stack // Added for debugging, remove in production
+        });
     }
 });
 
 router.post('/process_input', async (req, res) => {
     try {
         const { message, input_type } = req.body;
+        console.log(`[ChatRoute] Received input (${input_type || 'text'}): "${message}"`);
 
         if (!message) {
             return res.status(400).json({ error: 'Message is required' });
@@ -69,7 +89,9 @@ router.post('/process_input', async (req, res) => {
         }
 
         const prompt = `${context} User Question: ${message}`;
+        console.log(`[ChatRoute] Requesting generation from LLM...`);
         const response = await llmService.generateResponse(prompt);
+        console.log(`[ChatRoute] LLM responded (${response.length} chars)`);
 
         res.json({
             user_input: message,
@@ -78,7 +100,11 @@ router.post('/process_input', async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error(`[ChatRoute] Error processing input:`, error);
+        res.status(500).json({
+            error: error.message || 'Internal Server Error during input processing',
+            details: error.stack
+        });
     }
 });
 
