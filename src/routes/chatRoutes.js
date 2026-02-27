@@ -34,10 +34,14 @@ router.post('/process_transcript', async (req, res) => {
         sessionContext = fullText;
 
         // Generate QA Pairs (Simple 1-shot generation)
-        const chunk = fullText.slice(0, 4000); // Limit context
+        const chunk = fullText.slice(0, 6000); // Increased slightly for more context
         const prompt = `Based on this video transcript, generate 3 thought-provoking Q&A pairs. Format: 'Q: ... A: ...'. Context: ${chunk}`;
 
         console.log(`[ChatRoute] Requesting QA generation from LLM...`);
+
+        // Increase request timeout for this long operation
+        req.setTimeout(600000); // 10 minutes (for heavy local LLM ingestion)
+
         const qaResponse = await llmService.generateResponse(prompt);
         console.log(`[ChatRoute] LLM responded with ${qaResponse.length} chars`);
 
