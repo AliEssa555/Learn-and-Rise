@@ -1,0 +1,20 @@
+{
+    "watch": [
+        "src/",
+        "views/",
+        "server.js",
+        ".env"
+    ],
+    "ext": "js,json,ejs,env",
+    "ignore": [
+        "logs/*",
+        "node_modules/*",
+        "llama.cpp/*",
+        "app/*",
+        "draft*/*",
+        "tmp_sub_*",
+        "*.vtt",
+        "*.log"
+    ],
+    "delay": "3000"
+}

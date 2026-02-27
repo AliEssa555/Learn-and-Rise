@@ -48,6 +48,22 @@ app.use('/player', playerRoutes);
 app.use('/podcast', podcastRoutes);
 
 
+// --- Signal & Error Handling for Stability ---
+process.on('SIGINT', () => {
+    console.warn('\n[Server] Received SIGINT (Ctrl+C). If you didn\'t press it, nodemon or another process killed the server.');
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.warn('\n[Server] Received SIGTERM. Shutting down...');
+    process.exit(0);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('\n[Server] UNCAUGHT EXCEPTION:', err);
+});
+// ---------------------------------------------
+
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
