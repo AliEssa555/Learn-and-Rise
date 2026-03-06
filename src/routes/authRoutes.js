@@ -1,13 +1,13 @@
 const express = require('express');
 const admin = require('firebase-admin');
-const fetch = require('node-fetch'); // Required to call the Firebase REST API for password verification
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const router = express.Router();
 
-// The Web API Key from Firebase Console (Project Settings -> General)
-// Needed for the REST API to verify passwords since Admin SDK doesn't do sign-in.
-const FIREBASE_WEB_API_KEY = process.env.WEB_API_KEY;
+// Get secret from .env
+const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-for-dev-only';
 
 router.get('/login', (req, res) => {
     res.render('login', { mode: 'login', error: null });
@@ -16,95 +16,72 @@ router.get('/login', (req, res) => {
 router.post('/register', async (req, res) => {
     try {
         const { name, email, password } = req.body;
+        const db = admin.firestore();
 
-        // Check if user already exists
-        try {
-            await admin.auth().getUserByEmail(email);
-            return res.render('login', { mode: 'signup', error: "User already exists in Firebase" });
-        } catch (error) {
-            if (error.code !== 'auth/user-not-found') {
-                throw error;
-            }
+        // 1. Check if user already exists in Firestore
+        const userDoc = await db.collection('users').doc(email).get();
+        if (userDoc.exists) {
+            return res.render('login', { mode: 'signup', error: "User already exists" });
         }
 
-        // Create user in Firebase Auth
-        const userRecord = await admin.auth().createUser({
+        // 2. Hash the password
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        // 3. Save user to Firestore
+        const newUser = {
+            name,
             email,
-            password,
-            displayName: name,
-        });
+            passwordHash,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        await db.collection('users').doc(email).set(newUser);
 
-        // Generate custom token or directly log them in via REST
-        if (!FIREBASE_WEB_API_KEY) {
-            console.log("No FIREBASE_WEB_API_KEY found, user created but skipping auto-login");
-            return res.redirect('/auth/login');
-        }
+        // 4. Issue JWT
+        const token = jwt.sign(
+            { email: newUser.email, name: newUser.name },
+            JWT_SECRET,
+            { expiresIn: '5d' }
+        );
 
-        // Auto-login new user to give them a session cookie
-        const isLocalDev = process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.USE_LOCAL_LLM === 'true';
-        const identityToolkitUrl = isLocalDev
-            ? `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
-            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
-
-        const response = await fetch(identityToolkitUrl, {
-            method: 'POST',
-            body: JSON.stringify({ email, password, returnSecureToken: true }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const data = await response.json();
-        if (data.error) {
-            throw new Error(data.error.message);
-        }
-
-        // Create session cookie (expires in 5 days)
-        const expiresIn = 1000 * 60 * 60 * 24 * 5;
-        const sessionCookie = await admin.auth().createSessionCookie(data.idToken, { expiresIn });
-
-        res.cookie('token', sessionCookie, { maxAge: expiresIn, httpOnly: true });
+        // 5. Set cookie and redirect
+        res.cookie('token', token, { maxAge: 1000 * 60 * 60 * 24 * 5, httpOnly: true });
         res.redirect('/');
 
     } catch (error) {
         console.error("Registration Error:", error);
-        res.render('login', { mode: 'signup', error: error.message || "Server error during registration" });
+        res.render('login', { mode: 'signup', error: "Server error during registration" });
     }
 });
 
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
+        const db = admin.firestore();
 
-        if (!FIREBASE_WEB_API_KEY) {
-            console.error("Missing FIREBASE_WEB_API_KEY in .env");
-            return res.render('login', { error: "Server Configuration Error: Missing Firebase Web API Key" });
-        }
-
-        // Verify password via Firebase REST API
-        const isLocalDev = process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.USE_LOCAL_LLM === 'true';
-        const identityToolkitUrl = isLocalDev
-            ? `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
-            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
-
-        const response = await fetch(identityToolkitUrl, {
-            method: 'POST',
-            body: JSON.stringify({ email, password, returnSecureToken: true }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const data = await response.json();
-
-        if (data.error) {
-            console.error("Login Error from Firebase:", data.error.message);
+        // 1. Find user in Firestore
+        const userDoc = await db.collection('users').doc(email).get();
+        if (!userDoc.exists) {
             return res.render('login', { error: "Invalid credentials" });
         }
 
-        const idToken = data.idToken;
+        const userData = userDoc.data();
 
-        // Create session cookie (expires in 5 days)
-        const expiresIn = 1000 * 60 * 60 * 24 * 5;
-        const sessionCookie = await admin.auth().createSessionCookie(idToken, { expiresIn });
+        // 2. Compare passwords
+        const isMatch = await bcrypt.compare(password, userData.passwordHash);
+        if (!isMatch) {
+            return res.render('login', { error: "Invalid credentials" });
+        }
 
-        res.cookie('token', sessionCookie, { maxAge: expiresIn, httpOnly: true });
+        // 3. Issue JWT
+        const token = jwt.sign(
+            { email: userData.email, name: userData.name },
+            JWT_SECRET,
+            { expiresIn: '5d' }
+        );
+
+        // 4. Set cookie and redirect
+        res.cookie('token', token, { maxAge: 1000 * 60 * 60 * 24 * 5, httpOnly: true });
         res.redirect('/');
     }
     catch (error) {
