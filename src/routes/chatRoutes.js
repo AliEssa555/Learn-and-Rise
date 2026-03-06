@@ -3,6 +3,7 @@ const router = express.Router();
 const llmService = require('../services/llmService');
 const transcriptService = require('../services/transcriptService');
 const vectorService = require('../services/vectorService');
+const chatHistoryService = require('../services/chatHistoryService');
 
 // Store simple context in memory for this session
 // In production, use Redis or DB
@@ -43,10 +44,16 @@ router.post('/process_transcript', async (req, res) => {
         // If we have cached Q&A pairs, return them immediately
         if (cached && cachedPairs && cachedPairs.length > 0) {
             console.log(`[ChatRoute] Using ${cachedPairs.length} cached Q&A pairs`);
+
+            // Fetch persistent chat history for this video (default limit 6)
+            const history = await chatHistoryService.getHistory(videoId);
+            console.log(`[ChatRoute] Returning ${history.length} old chat messages from history.`);
+
             return res.json({
                 message: 'Transcript loaded (from cache)',
                 // Ensure format is consistent for UI: [[Q, A], ...]
-                qa_pairs: cachedPairs.map(p => Array.isArray(p) ? p : [p.question, p.answer])
+                qa_pairs: cachedPairs.map(p => Array.isArray(p) ? p : [p.question, p.answer]),
+                history: history
             });
         }
 
@@ -95,9 +102,15 @@ router.post('/process_transcript', async (req, res) => {
         }
 
         console.log(`[ChatRoute] Sending ${qaPairs.length} Q&A pairs to client`);
+
+        // Fetch persistent chat history for this video (default limit 6)
+        const history = await chatHistoryService.getHistory(videoId);
+        console.log(`[ChatRoute] Returning ${history.length} old chat messages from history.`);
+
         res.json({
             message: 'Transcript processed and questions generated',
-            qa_pairs: qaPairs.map(p => [p.question, p.answer]) // Compatibility with UI (array of arrays for frontend)
+            qa_pairs: qaPairs.map(p => [p.question, p.answer]), // Compatibility with UI (array of arrays for frontend)
+            history: history
         });
     } catch (error) {
         console.error(`[ChatRoute] Error processing transcript:`, error);

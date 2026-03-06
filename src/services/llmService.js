@@ -144,9 +144,11 @@ Use the provided context to answer the user's question accurately. If the inform
             const messages = promptValue.toChatMessages();
             const formattedPrompt = messages.map(m => {
                 const type = m._getType();
-                const role = type === 'human' ? 'User' : (type === 'system' ? 'System' : 'Assistant');
-                return `${role}: ${m.content}`;
-            }).join('\n');
+                let role = "user";
+                if (type === 'system') role = "system";
+                if (type === 'ai') role = "assistant";
+                return `<|im_start|>${role}\n${m.content}<|im_end|>`;
+            }).join('\n') + '\n<|im_start|>assistant\n';
 
             const response = await model.invoke(formattedPrompt);
             const responseContent = typeof response === 'string' ? response : response.content;

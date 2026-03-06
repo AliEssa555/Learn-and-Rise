@@ -41,8 +41,9 @@ router.post('/register', async (req, res) => {
         }
 
         // Auto-login new user to give them a session cookie
-        const identityToolkitUrl = process.env.FIREBASE_AUTH_EMULATOR_HOST
-            ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
+        const isLocalDev = process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.USE_LOCAL_LLM === 'true';
+        const identityToolkitUrl = isLocalDev
+            ? `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
             : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
 
         const response = await fetch(identityToolkitUrl, {
@@ -79,8 +80,9 @@ router.post('/login', async (req, res) => {
         }
 
         // Verify password via Firebase REST API
-        const identityToolkitUrl = process.env.FIREBASE_AUTH_EMULATOR_HOST
-            ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
+        const isLocalDev = process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.USE_LOCAL_LLM === 'true';
+        const identityToolkitUrl = isLocalDev
+            ? `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
             : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
 
         const response = await fetch(identityToolkitUrl, {

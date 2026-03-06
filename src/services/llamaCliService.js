@@ -20,15 +20,14 @@ class LlamaCliService {
         // Removed -cnv because it keeps process alive (interactive), causing request to hang.
         this.defaultArgs = [
             '-m', this.modelPath,
-            '-ngl', '32',
-            '-c', '4096', // Reduced context to 4096 for faster "prompt ingestion"
-            '-t', '8',
-            '-n', '512',
-            '--temp', '0.1',
+            '-ngl', '999',
+            '-c', '2048', // Reduced context to 4096 for faster "prompt ingestion"
+            '-t', '4',
+            '-n', '256',
+            '--temp', '0.3',
             '--repeat-penalty', '1.1',
             '--no-display-prompt',
-            '--reverse-prompt', 'User:',
-            '--reverse-prompt', 'System:'
+            '--log-disable'
         ];
     }
 
@@ -44,7 +43,7 @@ class LlamaCliService {
         return new Promise((resolve, reject) => {
             try {
                 // Write prompt to file to avoid command-line length limits and shell-escaping issues
-                fs.writeFileSync(tempPromptPath, `User: ${prompt}\nAssistant:`);
+                fs.writeFileSync(tempPromptPath, prompt);
             } catch (fsErr) {
                 console.error("[LlamaCLI] Failed to write temp prompt:", fsErr);
                 return reject(fsErr);
@@ -171,11 +170,17 @@ class LlamaCliService {
 
     _cleanResponse(output) {
         let cleaned = output.trim();
-        const assistantMarker = "Assistant:";
-        const lastMarkerIndex = cleaned.lastIndexOf(assistantMarker);
 
-        if (lastMarkerIndex !== -1) {
-            cleaned = cleaned.substring(lastMarkerIndex + assistantMarker.length).trim();
+        // Strip ALL startup logs and history by grabbing everything after the LAST assistant marker
+        const assistantMarker = "<|im_start|>assistant";
+        const markerIndex = cleaned.lastIndexOf(assistantMarker);
+        if (markerIndex !== -1) {
+            cleaned = cleaned.substring(markerIndex + assistantMarker.length).trim();
+        }
+
+        // Remove trailing ChatML stop tokens if the LLM actually outputted it literally
+        if (cleaned.endsWith('<|im_end|>')) {
+            cleaned = cleaned.replace(/<\|im_end\|>$/, '').trim();
         }
 
         // Also remove any leftover statistics block if salvaged

@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { FieldValue } = require('firebase-admin/firestore');
 
 class ChatHistoryService {
     get db() {
@@ -49,7 +50,7 @@ class ChatHistoryService {
                 .add({
                     role, // 'human' or 'ai'
                     content,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    createdAt: FieldValue.serverTimestamp()
                 });
             console.log(`[ChatHistoryService] Message saved to Firestore.`);
         } catch (error) {

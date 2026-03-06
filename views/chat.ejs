@@ -245,8 +245,12 @@
             </div>
 
             <div class="questions-container" id="questions-container" style="display:none">
-                <h4>Generated Questions:</h4>
-                <div id="questions-list"></div>
+                <h4 style="display: flex; justify-content: space-between; align-items: center;">
+                    Generated Questions:
+                    <button id="toggle-questions"
+                        style="padding: 2px 8px; font-size: 0.8rem; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: white;">Hide</button>
+                </h4>
+                <div id="questions-list" style="display: contents;"></div>
             </div>
 
             <div class="chat-area">
@@ -279,6 +283,18 @@
             const userInput = document.getElementById('user-input');
             const chatHistory = document.getElementById('chat-history');
             const sendBtn = document.getElementById('send-text');
+            const toggleQuestionsBtn = document.getElementById('toggle-questions');
+
+            // --- TOGGLE QUESTIONS LOGIC ---
+            toggleQuestionsBtn.addEventListener('click', () => {
+                if (questionsList.style.display !== 'none') {
+                    questionsList.style.display = 'none';
+                    toggleQuestionsBtn.innerText = 'Show';
+                } else {
+                    questionsList.style.display = 'contents';
+                    toggleQuestionsBtn.innerText = 'Hide';
+                }
+            });
 
             // --- AUTO-LOAD FROM URL PARAMS ---
             const urlParams = new URLSearchParams(window.location.search);
@@ -373,8 +389,17 @@
                         throw new Error(data.error || 'Failed to process video');
                     }
 
-                    // Show success
-                    addMessage(`Video processed: "${url}". ready to chat!`, 'Bot');
+                    // Populate History or show success
+                    if (data.history && data.history.length > 0) {
+                        chatHistory.innerHTML = ''; // Clear previous messages
+                        data.history.forEach(([role, text]) => {
+                            const sender = role === 'human' ? 'User' : 'Bot';
+                            addMessage(text, sender);
+                        });
+                        addMessage(`Video re-processed: "${url}". Resumed previous chat session!`, 'Bot');
+                    } else {
+                        addMessage(`Video processed: "${url}". ready to chat!`, 'Bot');
+                    }
 
                     // Show generated questions
                     if (data.qa_pairs && data.qa_pairs.length > 0) {
