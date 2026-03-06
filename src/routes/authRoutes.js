@@ -41,7 +41,11 @@ router.post('/register', async (req, res) => {
         }
 
         // Auto-login new user to give them a session cookie
-        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`, {
+        const identityToolkitUrl = process.env.FIREBASE_AUTH_EMULATOR_HOST
+            ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
+            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
+
+        const response = await fetch(identityToolkitUrl, {
             method: 'POST',
             body: JSON.stringify({ email, password, returnSecureToken: true }),
             headers: { 'Content-Type': 'application/json' }
@@ -75,7 +79,11 @@ router.post('/login', async (req, res) => {
         }
 
         // Verify password via Firebase REST API
-        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`, {
+        const identityToolkitUrl = process.env.FIREBASE_AUTH_EMULATOR_HOST
+            ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`
+            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
+
+        const response = await fetch(identityToolkitUrl, {
             method: 'POST',
             body: JSON.stringify({ email, password, returnSecureToken: true }),
             headers: { 'Content-Type': 'application/json' }
