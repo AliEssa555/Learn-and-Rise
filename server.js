@@ -30,6 +30,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Logging Middleware to see if requests reach the server
+app.use((req, res, next) => {
+    console.log(`\n[Server] Request: ${req.method} ${req.url}`);
+    next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // View Engine

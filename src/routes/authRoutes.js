@@ -7,7 +7,7 @@ const router = express.Router();
 
 // The Web API Key from Firebase Console (Project Settings -> General)
 // Needed for the REST API to verify passwords since Admin SDK doesn't do sign-in.
-const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY;
+const FIREBASE_WEB_API_KEY = process.env.WEB_API_KEY;
 
 router.get('/login', (req, res) => {
     res.render('login', { mode: 'login', error: null });
