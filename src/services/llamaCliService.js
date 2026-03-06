@@ -187,19 +187,43 @@ class LlamaCliService {
     _cleanResponse(output) {
         let cleaned = output.trim();
 
-        // Strip ALL startup logs and history by grabbing everything after the LAST assistant marker
-        const assistantMarker = "<|im_start|>assistant";
-        const markerIndex = cleaned.lastIndexOf(assistantMarker);
-        if (markerIndex !== -1) {
-            cleaned = cleaned.substring(markerIndex + assistantMarker.length).trim();
+        // 1. Strip ALL startup logs and prompt echos by looking for the last known marker
+        const markers = ["<|im_start|>assistant", "assistant:", "Response:", "AI:"];
+        let bestIndex = -1;
+        let bestMarker = "";
+
+        for (const marker of markers) {
+            const idx = cleaned.lastIndexOf(marker);
+            if (idx > bestIndex) {
+                bestIndex = idx;
+                bestMarker = marker;
+            }
         }
 
-        // Remove trailing ChatML stop tokens if the LLM actually outputted it literally
-        if (cleaned.endsWith('<|im_end|>')) {
-            cleaned = cleaned.replace(/<\|im_end\|>$/, '').trim();
+        if (bestIndex !== -1) {
+            cleaned = cleaned.substring(bestIndex + bestMarker.length).trim();
+        } else {
+            // Fallback: If no markers found, aggressively strip known llama-cli startup noise
+            // This handles cases where the model might start responding without the marker
+            const noisePatterns = [
+                /^Loading model.*?available commands.*?>\s*/is,
+                /^build : .*?>\s*/is,
+                /^.*?\d{2}:\d{2}:\d{2}.*?:\s*/, // Log timestamps
+                /<\|im_start\|>system.*?<\|im_end\|>\s*/is, // Remove system prompt
+                /<\|im_start\|>user.*?<\|im_end\|>\s*/is,   // Remove user prompt
+                /<\|im_start\|>user.*?(?=Transcript:)/is,   // Partial user prompt
+                /Transcript:.*?James May.*?(?=\s|$)/is      // Specific known noise from user's example
+            ];
+
+            for (const pattern of noisePatterns) {
+                cleaned = cleaned.replace(pattern, '').trim();
+            }
         }
 
-        // Also remove any leftover statistics block if salvaged
+        // 2. Remove trailing ChatML stop tokens or boilerplate
+        cleaned = cleaned.replace(/<\|im_end\|>$/g, '').trim();
+
+        // 3. Remove statistical metadata e.g., "[ Prompt: 512 tokens, ... ]"
         if (cleaned.includes('[ Prompt:')) {
             cleaned = cleaned.split('[ Prompt:')[0].trim();
         }

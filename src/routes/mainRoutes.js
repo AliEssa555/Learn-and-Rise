@@ -15,11 +15,11 @@ router.get('/', async (req, res) => {
         for (const doc of snapshot.docs) {
             const data = doc.data();
             // Check if there's at least one message in the 'chats' subcollection
-            // Path: transcripts/{videoId}/chats/default_user/messages
+            // Path: transcripts/{videoId}/chats/{userEmail}/messages
             const chatSnap = await db.collection('transcripts')
                 .doc(doc.id)
                 .collection('chats')
-                .doc('default_user')
+                .doc(req.user.email)
                 .collection('messages')
                 .limit(1)
                 .get();
@@ -27,6 +27,7 @@ router.get('/', async (req, res) => {
             if (!chatSnap.empty) {
                 recentConvos.push({
                     videoId: doc.id,
+                    title: data.title || doc.id,
                     url: data.url,
                     preview: data.fullText ? data.fullText.slice(0, 100) + '...' : 'Conversation context...',
                     date: data.createdAt ? data.createdAt.toDate().toLocaleDateString() : 'Recently'

@@ -25,7 +25,7 @@ router.post('/process_transcript', async (req, res) => {
 
         // Get Transcript
         console.log(`[ChatRoute] Fetching transcript...`);
-        const { fullText, cached, qa_pairs: cachedPairs } = await transcriptService.getTranscript(youtube_url);
+        const { fullText, cached, qa_pairs: cachedPairs, title: cachedTitle } = await transcriptService.getTranscript(youtube_url);
 
         if (!fullText || fullText.trim().length === 0) {
             console.warn(`[ChatRoute] Transcript is empty for URL: ${youtube_url}`);
@@ -46,11 +46,12 @@ router.post('/process_transcript', async (req, res) => {
             console.log(`[ChatRoute] Using ${cachedPairs.length} cached Q&A pairs`);
 
             // Fetch persistent chat history for this video (default limit 6)
-            const history = await chatHistoryService.getHistory(videoId);
-            console.log(`[ChatRoute] Returning ${history.length} old chat messages from history.`);
+            const history = await chatHistoryService.getHistory(videoId, req.user.email);
+            console.log(`[ChatRoute] Returning ${history.length} old chat messages from history for ${req.user.email}.`);
 
             return res.json({
                 message: 'Transcript loaded (from cache)',
+                title: cachedTitle || videoId,
                 // Ensure format is consistent for UI: [[Q, A], ...]
                 qa_pairs: cachedPairs.map(p => Array.isArray(p) ? p : [p.question, p.answer]),
                 history: history
@@ -58,6 +59,17 @@ router.post('/process_transcript', async (req, res) => {
         }
 
         console.log(`[ChatRoute] Transcript fetched (${fullText.length} chars)`);
+
+        // Generate Title for Conversation
+        let convoTitle = videoId;
+        try {
+            const titlePrompt = `Generate a very concise, descriptive title (max 6 words) for this video transcript. Return ONLY the title text. Transcript: ${fullText.slice(0, 1000)}`;
+            convoTitle = await llmService.generateResponse(titlePrompt);
+            convoTitle = convoTitle.replace(/["']/g, '').trim();
+            console.log(`[ChatRoute] Generated Title: ${convoTitle}`);
+        } catch (titleErr) {
+            console.warn(`[ChatRoute] Failed to generate title:`, titleErr.message);
+        }
 
         // Generate QA Pairs
         const chunk = fullText.slice(0, 6000);
@@ -94,7 +106,8 @@ router.post('/process_transcript', async (req, res) => {
         try {
             const admin = require('firebase-admin');
             await admin.firestore().collection('transcripts').doc(videoId).update({
-                qa_pairs: qaPairs
+                qa_pairs: qaPairs,
+                title: convoTitle
             });
             console.log(`[ChatRoute] Generated Q&A pairs saved to Firestore for ${videoId}`);
         } catch (saveError) {
@@ -104,11 +117,12 @@ router.post('/process_transcript', async (req, res) => {
         console.log(`[ChatRoute] Sending ${qaPairs.length} Q&A pairs to client`);
 
         // Fetch persistent chat history for this video (default limit 6)
-        const history = await chatHistoryService.getHistory(videoId);
-        console.log(`[ChatRoute] Returning ${history.length} old chat messages from history.`);
+        const history = await chatHistoryService.getHistory(videoId, req.user.email);
+        console.log(`[ChatRoute] Returning ${history.length} old chat messages from history for ${req.user.email}.`);
 
         res.json({
             message: 'Transcript processed and questions generated',
+            title: convoTitle,
             qa_pairs: qaPairs.map(p => [p.question, p.answer]), // Compatibility with UI (array of arrays for frontend)
             history: history
         });
@@ -143,8 +157,8 @@ router.post('/process_input', async (req, res) => {
             videoId = transcriptService.extractVideoId(req.headers.referer);
         }
 
-        console.log(`[ChatRoute] Requesting generation from LLM (VideoID: ${videoId})...`);
-        const response = await llmService.generateResponse(message, systemContext, videoId);
+        console.log(`[ChatRoute] Requesting generation from LLM (VideoID: ${videoId}, User: ${req.user.email})...`);
+        const response = await llmService.generateResponse(message, systemContext, videoId, req.user.email);
         console.log(`[ChatRoute] LLM responded (${response.length} chars)`);
 
         res.json({
@@ -159,6 +173,21 @@ router.post('/process_input', async (req, res) => {
             error: error.message || 'Internal Server Error during input processing',
             details: error.stack
         });
+    }
+});
+
+router.delete('/delete_conversation/:videoId', async (req, res) => {
+    try {
+        const { videoId } = req.params;
+        const userId = req.user.email;
+        console.log(`[ChatRoute] Request to delete conversation: ${videoId} for ${userId}`);
+
+        await chatHistoryService.clearHistory(videoId, userId);
+
+        res.json({ success: true, message: 'Conversation deleted successfully' });
+    } catch (error) {
+        console.error(`[ChatRoute] Error deleting conversation:`, error);
+        res.status(500).json({ error: 'Failed to delete conversation' });
     }
 });
 

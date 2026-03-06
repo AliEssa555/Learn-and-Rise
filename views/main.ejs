@@ -60,7 +60,9 @@
                     <% recentConvos.forEach(convo=> { %>
                         <div class="history-item">
                             <div class="history-info">
-                                <strong>Video: <%= convo.videoId %></strong>
+                                <strong>
+                                    <%= convo.title %>
+                                </strong>
                                 <p class="text-muted small mb-1">
                                     <%= convo.preview %>
                                 </p>
@@ -68,14 +70,42 @@
                                     <%= convo.date %>
                                 </span>
                             </div>
-                            <a href="/chat/chat_interface?videoId=<%= convo.videoId %>"
-                                class="btn btn-outline-primary btn-sm">Resume Chat</a>
+                            <div class="d-flex flex-column align-items-end">
+                                <a href="/chat/chat_interface?videoId=<%= convo.videoId %>"
+                                    class="btn btn-outline-primary btn-sm mb-2">Resume Chat</a>
+                                <button class="btn btn-link text-danger p-0"
+                                    onclick="deleteConversation('<%= convo.videoId %>')">
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                            </div>
                         </div>
                         <% }) %>
                 </div>
             </div>
             <% } %>
     </div>
+
+    <script>
+        async function deleteConversation(videoId) {
+            if (!confirm('Are you sure you want to delete this conversation?')) return;
+
+            try {
+                const response = await fetch(`/chat/delete_conversation/${videoId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    location.reload(); // Simple way to refresh the list
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to delete'));
+                }
+            } catch (err) {
+                console.error('Delete failed:', err);
+                alert('Connection error. Please try again.');
+            }
+        }
+    </script>
 
     <style>
         .dashboard {

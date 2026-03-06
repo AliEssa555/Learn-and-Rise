@@ -71,12 +71,12 @@ class LLMService {
      * @param {string} systemContext 
      * @param {string} videoId - Used for persistent history and RAG
      */
-    async generateResponse(userPrompt, systemContext = "", videoId = null) {
+    async generateResponse(userPrompt, systemContext = "", videoId = null, userId = null) {
         console.log(`[LLMService] Generating response (Local: ${this.useLocal})`);
 
         // If modern LangChain is ready
         if (this.useLocal && LlamaChatModel && ChatPromptTemplate) {
-            return await this._generateWithLCEL(userPrompt, systemContext, videoId);
+            return await this._generateWithLCEL(userPrompt, systemContext, videoId, userId);
         }
 
         // Fallback 1: Direct Local LLM
@@ -98,15 +98,15 @@ class LLMService {
     /**
      * Modern LCEL implementation with persistent history and RAG.
      */
-    async _generateWithLCEL(userPrompt, systemContext, videoId) {
+    async _generateWithLCEL(userPrompt, systemContext, videoId, userId) {
         console.log("[LLMService] Executing via modern LCEL sequence...");
 
         const model = new LlamaChatModel({});
 
-        // Load history from Firestore if videoId provided
+        // Load history from Firestore if videoId and userId provided
         let historyMessages = [];
-        if (videoId) {
-            const savedHistory = await chatHistoryService.getHistory(videoId);
+        if (videoId && userId) {
+            const savedHistory = await chatHistoryService.getHistory(videoId, userId);
             // Format for ChatPromptTemplate: ["human", "message"]
             historyMessages = savedHistory.map(([role, content]) => [role, content]);
             console.log(`[LLMService] Loaded ${historyMessages.length} messages from persistent history.`);
@@ -154,9 +154,9 @@ Use the provided context to answer the user's question accurately. If the inform
             const responseContent = typeof response === 'string' ? response : response.content;
 
             // Save to Persistent History
-            if (videoId) {
-                await chatHistoryService.addMessage(videoId, 'human', userPrompt);
-                await chatHistoryService.addMessage(videoId, 'ai', responseContent);
+            if (videoId && userId) {
+                await chatHistoryService.addMessage(videoId, 'human', userPrompt, userId);
+                await chatHistoryService.addMessage(videoId, 'ai', responseContent, userId);
             }
 
             return responseContent;

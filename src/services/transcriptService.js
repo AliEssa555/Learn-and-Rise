@@ -131,7 +131,8 @@ class TranscriptService {
                     fullText: data.fullText,
                     items: [],
                     cached: true,
-                    qa_pairs: data.qa_pairs || []
+                    qa_pairs: data.qa_pairs || [],
+                    title: data.title || null
                 };
             }
         } catch (error) {
