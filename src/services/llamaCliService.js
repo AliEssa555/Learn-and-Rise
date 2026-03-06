@@ -15,6 +15,19 @@ class LlamaCliService {
             fs.mkdirSync(this.logDir, { recursive: true });
         }
 
+        // Zombie Process Tracking
+        this.activeProcesses = new Set();
+        process.on('SIGINT', () => {
+            if (this.activeProcesses.size > 0) {
+                console.log(`\n[LlamaCLI] Killing ${this.activeProcesses.size} active process(es)...`);
+                this.activeProcesses.forEach(proc => {
+                    try { proc.kill('SIGKILL'); } catch (e) { }
+                });
+                this.activeProcesses.clear();
+            }
+            process.exit(0);
+        });
+
         // Args from user request (modified for API usage):
         // -m qwen2.5-7b-q4_k_m.gguf -ngl 100 -c 8192 -t 8 -n -1
         // Removed -cnv because it keeps process alive (interactive), causing request to hang.
@@ -64,6 +77,9 @@ class LlamaCliService {
                 windowsHide: true,
                 stdio: ['ignore', 'pipe', 'pipe']
             });
+
+            this.activeProcesses.add(child);
+            child.on('exit', () => this.activeProcesses.delete(child));
 
             let output = '';
             let errorOutput = '';
